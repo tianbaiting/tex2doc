@@ -8,6 +8,7 @@ import pypandoc
 import sys
 import argparse
 import subprocess
+import shutil
 import re
 from pathlib import Path
 
@@ -110,7 +111,14 @@ def preprocess_tex_file(input_file: Path, output_file: Path):
     print(f"LaTeX文件预处理完成: {output_file}")
     return output_file
 
-def convert_tex_to_docx(input_file: Path, output_file: Path, bib_file: Path = None, convert_pdf_images: bool = True):
+def convert_tex_to_docx(
+    input_file: Path,
+    output_file: Path,
+    bib_file: Path = None,
+    convert_pdf_images: bool = True,
+    reference_doc: Path = None,
+    csl_file: Path = None
+):
     """
     Converts a .tex file to a .docx file using pandoc, with optional bibliography support.
 
@@ -136,6 +144,20 @@ def convert_tex_to_docx(input_file: Path, output_file: Path, bib_file: Path = No
     # Pandoc 的额外参数列表
     # 检查Pandoc版本以决定使用哪些参数
     extra_args = []
+
+    # —— 检测并启用 pandoc-crossref 过滤器（如果已安装）
+    if shutil.which('pandoc-crossref'):
+        extra_args.append('--filter=pandoc-crossref')
+        print("已检测到 pandoc-crossref，已启用图表编号和交叉引用功能")
+        # —— 使用中文“图 1”这样的前缀，加上这个 metadata
+        extra_args.extend([
+            '-MfigureTitle=图',
+            '-MtableTitle=表',
+            '-MequationTitle=式'
+        ])
+        print("已设置中文前缀：图、表、式")
+    else:
+        print("未检测到 pandoc-crossref，跳过启用该过滤器")
     
     # 检查是否支持--citeproc（较新版本的pandoc）
     try:
@@ -155,6 +177,22 @@ def convert_tex_to_docx(input_file: Path, output_file: Path, bib_file: Path = No
         else:
             print(f"使用参考文献文件: {bib_file}")
             extra_args.extend([f'--bibliography={bib_file}'])
+
+    # 如果指定了 Word 模板，添加 --reference-doc
+    if reference_doc:
+        if not reference_doc.is_file():
+            print(f"警告: 模板文件不存在 -> {reference_doc}，忽略模板设置。")
+        else:
+            print(f"使用 Word 模板: {reference_doc}")
+            extra_args.extend([f'--reference-doc={reference_doc}'])
+
+    # 如果指定了 CSL 文件，添加 --csl
+    if csl_file:
+        if not csl_file.is_file():
+            print(f"警告: CSL 文件不存在 -> {csl_file}，忽略引用样式设置。")
+        else:
+            print(f"使用 CSL 样式文件: {csl_file}")
+            extra_args.extend([f'--csl={csl_file}'])
 
     try:
         # 调用 pypandoc 执行转换
@@ -207,6 +245,16 @@ def main():
         action="store_true",
         help="禁用PDF图片转换功能，保持原始PDF格式。"
     )
+    parser.add_argument(
+        "-r", "--reference-doc",
+        type=str,
+        help="可选的 Word 模板文件 (.docx)，用来定义页边距、标题编号等样式。"
+    )
+    parser.add_argument(
+        "--csl",
+        type=str,
+        help="可选的 CSL 样式文件 (.csl)，用来控制参考文献的引用风格（如数字序号）。"
+    )
 
     args = parser.parse_args()
 
@@ -220,11 +268,22 @@ def main():
         
     # 处理参考文献文件路径
     bib_path = Path(args.bibliography) if args.bibliography else None
+    # 处理 Word 模板路径
+    template_path = Path(args.reference_doc) if args.reference_doc else None
+    # 处理 CSL 样式文件路径
+    csl_path = Path(args.csl) if args.csl else None
     
     # 确定是否转换PDF图片
     convert_pdf_images = not args.no_pdf_convert
 
-    convert_tex_to_docx(input_path, output_path, bib_path, convert_pdf_images)
+    convert_tex_to_docx(
+        input_path,
+        output_path,
+        bib_file=bib_path,
+        convert_pdf_images=convert_pdf_images,
+        reference_doc=template_path,
+        csl_file=csl_path
+    )
 
 if __name__ == "__main__":
     main()
