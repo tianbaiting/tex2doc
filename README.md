@@ -95,6 +95,9 @@ python3 tex2word.py input.tex -o output.docx -b references.bib
 
 # 禁用PDF图片转换
 python3 tex2word.py input.tex -o output.docx --no-pdf-convert
+
+# 指定 word 模板，添加参考文献格式
+python3 tex2word.py input.tex -o output.docx -b references.bib --r template.docx --csl style.csl
 ```
 
 ### 命令行参数
